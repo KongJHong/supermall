@@ -3,7 +3,11 @@
       <nav-bar class="home-nav">
         <div slot="center">购物街</div>
       </nav-bar>
-
+      <tab-control @tabClick="tabClick" 
+                      :titles="['流行','新款','精选']" 
+                      ref="tabControl1"
+                      class="tab-control"
+                      v-show="isTabFixed"></tab-control>
       <scroll class="content" 
               ref="scroll" 
               :probe-type="3" 
@@ -11,10 +15,12 @@
               :pull-up-load="true"
               @pullingUp="loadMore"
               >
-        <home-swiper :banners="banners"></home-swiper>
+        <home-swiper :banners="banners" @swiperImageLoad="swiperImageLoad"></home-swiper>
         <recommend-view :recommends="recommends"></recommend-view>
         <feature-view></feature-view>
-        <tab-control class="tab-control" @tabClick="tabClick" :titles="['流行','新款','精选']"></tab-control>
+        <tab-control @tabClick="tabClick" 
+                      :titles="['流行','新款','精选']" 
+                      ref="tabControl2"></tab-control>
         <good-list :goods="showGoods"></good-list>
       </scroll>
 
@@ -35,10 +41,11 @@ import NavBar from 'components/common/navbar/NavBar';
 import TabControl from 'components/content/tabControl/TabControl';
 import GoodList from 'components/content/goods/GoodsList';
 import BackTop from 'components/common/backTop/BackTop';
+import Scroll from 'components/common/scroll/Scroll'
 
 // 工具
 import {getHomeMultidata,getHomeGoods} from 'network/home';
-import Scroll from 'components/common/scroll/Scroll'
+import {debounce} from 'common/utils'
 
 
 export default {
@@ -63,13 +70,25 @@ export default {
         'sell':{page:0,list:[]}
       },
       currentType:'pop',
-      isShowBackTop:true
+      isShowBackTop:true,
+      tabOffsetTop:0,
+      isTabFixed:false,
+      saveY:0
     }
   },
   computed:{
     showGoods(){
       return this.goods[this.currentType].list
     }
+  },
+  // 这两个函数必须在keep alive模式下才能用
+  activated(){
+    this.$refs.scroll.scrollTo(0,this.saveY,0);
+    this.$refs.scroll.refresh();//可能有一些小问题，
+  },
+  deactivated(){
+    this.saveY = this.$refs.scroll.getScrollY();
+    console.log(this.saveY)
   },
   created(){
     //1.请求多个数据
@@ -79,6 +98,15 @@ export default {
     this.getHomeGoods('pop')
     this.getHomeGoods('new')
     this.getHomeGoods('sell')
+  },
+  mounted(){
+    //1.监听item中图片加载完成  $bus事件总线在main.js中初始化
+    //this.$refs.scroll.refresh是函数 this.$refs.scroll.refresh()是传入函数的返回值
+    const refresh = debounce(this.$refs.scroll.refresh,500)
+
+    this.$bus.$on("itemImageLoad",()=>{
+      refresh();
+    })
   },
   methods:{
     /**
@@ -97,6 +125,9 @@ export default {
           this.currentType = 'sell';
           break;
       }
+
+      this.$refs.tabControl1.currentIndex = index;
+      this.$refs.tabControl2.currentIndex = index;
     },
     backClick(){
       // this.$refs.scroll相当于获得上面的scroll组件
@@ -105,7 +136,11 @@ export default {
     },
     //滚动事件
     contentScroll(position){
+      //1.判断BackTop是否显示
       this.isShowBackTop = (-position.y) > 1000;
+
+      //2.决定tabControl是否吸顶(position:fixed)
+      this.isTabFixed = (-position.y) > this.tabOffsetTop;
     },
     //上啦加载更多
     loadMore(){
@@ -115,7 +150,11 @@ export default {
       // 重新计算可滚动的区域
       this.$refs.scroll.scroll.refresh();
     },
-
+    swiperImageLoad(){
+      // 2.获取tabControl的offetTop
+      //所有的组件都有一个属性$el,用于获取组件中的元素
+      this.tabOffsetTop = this.$refs.tabControl2.$el.offsetTop
+    },
     /**
      * 网络请求相关方法
      */
@@ -144,7 +183,7 @@ export default {
 <style  scoped>
 
   #home{
-    padding-top: 44px;
+    /* padding-top: 44px; */
     height: 100vh;
     position: relative;
   }
@@ -154,19 +193,20 @@ export default {
     background-color: var(--color-tint);
     color:#fff;
 
-    position:fixed;
+    /* position:fixed;
     left:0;
     right:0;
     top:0;
-    z-index:9;
+    z-index:9; */
   }
 
-  .tab-control{
+/* 没效果了 */
+  /* .tab-control{ */
     /* sticky已经不起作用了，因为整个模块交给了scroll管理 */
     /* position:sticky; */
-    top: 44px;
-    z-index: 9;     /* 防止遮挡 */
-  }
+    /* top: 44px; */
+    /* z-index: 9;     防止遮挡 */
+  /* } */
 
   /* scoped是有作用域的 */
   .content{
@@ -186,5 +226,9 @@ export default {
     margin-top: 44px;
   } */
   
+  .tab-control{
+    position: relative;
+    z-index: 9  ;
+  }
   
 </style>
